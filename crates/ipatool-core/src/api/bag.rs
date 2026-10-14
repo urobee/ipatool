@@ -15,7 +15,8 @@ pub const AUTH_PATH: &str = "/WebObjects/MZFinance.woa/wa/authenticate";
 
 const AUTH_HOST: &str = "buy.itunes.apple.com";
 const NATIVE_AUTH_HOST: &str = "auth.itunes.apple.com";
-const NATIVE_AUTH_PATH: &str = "/auth/v1/native/fast";
+const NATIVE_AUTH_PATH: &str = "/auth/v1/native";
+const NATIVE_FAST_AUTH_PATH: &str = "/auth/v1/native/fast";
 const EXPERIMENTAL_NATIVE_AUTH: &str = "IPATOOL_EXPERIMENTAL_NATIVE_AUTH";
 const ITUNES_USER_AGENT: &str = "iTunes/12.12.0.6 (Windows; Microsoft Windows 10 x64)";
 /// Account-specific pods, e.g. `p14-buy.itunes.apple.com`.
@@ -97,7 +98,9 @@ pub fn validate_auth_endpoint(url: &Url) -> Result<(), ClientError> {
     }
 
     let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-    if host == NATIVE_AUTH_HOST && url.path().trim_end_matches('/') == NATIVE_AUTH_PATH {
+    if host == NATIVE_AUTH_HOST
+        && matches!(url.path().trim_end_matches('/'), NATIVE_AUTH_PATH | NATIVE_FAST_AUTH_PATH)
+    {
         return Ok(());
     }
 
@@ -201,6 +204,21 @@ mod tests {
         assert!(
             validate_auth_endpoint(&url("https://auth.itunes.apple.com/auth/v1/native/fast/"))
                 .is_ok()
+        );
+    }
+
+    #[test]
+    fn accepts_native_endpoint_advertised_by_bag() {
+        assert!(
+            validate_auth_endpoint(&url("https://auth.itunes.apple.com/auth/v1/native")).is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_unexpected_native_path() {
+        assert!(
+            validate_auth_endpoint(&url("https://auth.itunes.apple.com/auth/v1/native/other"))
+                .is_err()
         );
     }
 
