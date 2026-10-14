@@ -14,10 +14,6 @@ const BAG_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 pub const AUTH_PATH: &str = "/WebObjects/MZFinance.woa/wa/authenticate";
 
 const AUTH_HOST: &str = "buy.itunes.apple.com";
-const NATIVE_AUTH_HOST: &str = "auth.itunes.apple.com";
-const NATIVE_AUTH_PATH: &str = "/auth/v1/native/fast";
-const EXPERIMENTAL_NATIVE_AUTH: &str = "IPATOOL_EXPERIMENTAL_NATIVE_AUTH";
-const ITUNES_USER_AGENT: &str = "iTunes/12.12.0.6 (Windows; Microsoft Windows 10 x64)";
 /// Account-specific pods, e.g. `p14-buy.itunes.apple.com`.
 const AUTH_POD_SUFFIX: &str = "-buy.itunes.apple.com";
 
@@ -28,14 +24,12 @@ pub struct BagConfig {
 }
 
 pub async fn fetch_bag(client: &AppleClient) -> Result<BagConfig, ClientError> {
-    // Opt-in only. A different User-Agent can cause Apple's bag to advertise
-    // the native MZAuth endpoint. Never switch credential targets silently.
-    let native = std::env::var(EXPERIMENTAL_NATIVE_AUTH).as_deref() == Ok("1");
-    let mut req = client.http().get(BAG_URL).timeout(BAG_REQUEST_TIMEOUT);
-    if native {
-        req = req.header(reqwest::header::USER_AGENT, ITUNES_USER_AGENT);
-    }
-    let resp = req.send().await?;
+    let resp = client
+        .http()
+        .get(BAG_URL)
+        .timeout(BAG_REQUEST_TIMEOUT)
+        .send()
+        .await?;
     let body = resp.bytes().await?;
 
     let outer: HashMap<String, plist::Value> =
@@ -99,10 +93,6 @@ pub fn validate_auth_endpoint(url: &Url) -> Result<(), ClientError> {
     }
 
     let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-    if host == NATIVE_AUTH_HOST && url.path().trim_end_matches('/') == NATIVE_AUTH_PATH {
-        return Ok(());
-    }
-
     if host != AUTH_HOST && !host.ends_with(AUTH_POD_SUFFIX) {
         return Err(ClientError::UnexpectedResponse(format!(
             "unsupported authentication endpoint {url}: unexpected host"
@@ -195,22 +185,15 @@ mod tests {
         );
     }
 
+    /// The endpoint the previous fix targeted. Apple lists it under
+    /// `sign-sap-request` too, so it needs a signature just the same and is no
+    /// longer a fallback worth having.
     #[test]
-    fn allows_exact_native_fast_endpoint() {
+    fn rejects_native_fast_endpoint() {
         assert!(
             validate_auth_endpoint(&url("https://auth.itunes.apple.com/auth/v1/native/fast/"))
-                .is_ok()
+                .is_err()
         );
-    }
-
-    #[test]
-    fn rejects_native_lookalike_host() {
-        assert!(validate_auth_endpoint(&url("https://auth.itunes.apple.com.evil.test/auth/v1/native/fast")).is_err());
-    }
-
-    #[test]
-    fn rejects_native_unexpected_action() {
-        assert!(validate_auth_endpoint(&url("https://auth.itunes.apple.com/auth/v1/native/other")).is_err());
     }
 
     #[test]
