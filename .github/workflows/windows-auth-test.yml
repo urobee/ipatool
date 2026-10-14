@@ -18,7 +18,7 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --all --check
       - name: Compile Windows release
-        run: cargo build --release --locked -p ipatool-cli
+        run: cargo build --release --locked --workspace
       - name: Package executable
         shell: pwsh
         run: |
