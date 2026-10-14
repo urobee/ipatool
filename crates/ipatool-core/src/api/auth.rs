@@ -122,6 +122,12 @@ pub async fn login(
             )));
         }
 
+        if !crate::client::plist_xml::looks_like_plist(&resp_body) {
+            return Err(ClientError::UnexpectedResponse(format!(
+                "authentication endpoint returned a non-plist response (HTTP {status});                  no account verdict was received"
+            )));
+        }
+
         let dict: HashMap<String, plist::Value> =
             crate::client::plist_xml::parse_plist_response(&resp_body)?;
 
