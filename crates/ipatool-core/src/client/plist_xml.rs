@@ -45,6 +45,15 @@ pub fn normalize_plist_xml(body: &[u8]) -> Vec<u8> {
     body.to_vec()
 }
 
+/// Detect response framing without exposing or logging potentially sensitive data.
+pub fn looks_like_plist(body: &[u8]) -> bool {
+    if body.starts_with(b"bplist00") {
+        return true;
+    }
+    let text = String::from_utf8_lossy(body);
+    text.contains("<plist") || text.contains("<dict>") || text.contains("<key>")
+}
+
 pub fn parse_plist_response<T: serde::de::DeserializeOwned>(body: &[u8]) -> Result<T, ClientError> {
     let normalized = normalize_plist_xml(body);
     let cursor = std::io::Cursor::new(&normalized);
@@ -55,6 +64,14 @@ pub fn parse_plist_response<T: serde::de::DeserializeOwned>(body: &[u8]) -> Resu
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn distinguishes_plist_from_html_error() {
+        assert!(looks_like_plist(b"<plist version=\"1.0\"><dict></dict></plist>"));
+        assert!(looks_like_plist(b"bplist00"));
+        assert!(!looks_like_plist(b"<html><body>403 Forbidden</body></html>"));
+        assert!(!looks_like_plist(b""));
+    }
 
     #[test]
     fn test_normalize_standard_plist() {
