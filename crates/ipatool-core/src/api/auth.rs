@@ -125,6 +125,17 @@ pub async fn login(
         let dict: HashMap<String, plist::Value> =
             crate::client::plist_xml::parse_plist_response(&resp_body)?;
 
+        // Log only fixed metadata flags, never arbitrary response values. Apple's
+        // plist can include account details, tokens, or private dialog text.
+        tracing::debug!(
+            has_failure_type = dict.contains_key("failureType"),
+            has_customer_message = dict.contains_key("customerMessage"),
+            has_dialog = dict.contains_key("dialog"),
+            has_dialog_id = dict.contains_key("dialogId"),
+            has_password_token = dict.contains_key("passwordToken"),
+            "auth response metadata"
+        );
+
         if let Some(err) = StoreError::from_plist_dict(&dict) {
             if err.is_retryable() && attempt < MAX_ATTEMPTS {
                 attempt += 1;
