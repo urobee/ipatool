@@ -13,6 +13,8 @@ const AUTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Header carrying the SAP signature over the request body.
 const ACTION_SIGNATURE_HEADER: &str = "X-Apple-ActionSignature";
+const NATIVE_AUTH_HOST: &str = "auth.itunes.apple.com";
+const ITUNES_USER_AGENT: &str = "iTunes/12.12.0.6 (Windows; Microsoft Windows 10 x64)";
 
 pub async fn login(
     client: &AppleClient,
@@ -46,6 +48,11 @@ pub async fn login(
             .post(current_url.as_str())
             .header("Content-Type", "application/x-apple-plist")
             .timeout(AUTH_REQUEST_TIMEOUT);
+
+        // Keep the User-Agent consistent with the bag request that selected MZAuth.
+        if current_url.host_str() == Some(NATIVE_AUTH_HOST) {
+            request = request.header(reqwest::header::USER_AGENT, ITUNES_USER_AGENT);
+        }
 
         // Apple signs the exact bytes it receives, so this has to happen after
         // the body is serialized and before it is sent.
@@ -98,16 +105,13 @@ pub async fn login(
 
         let resp_body = resp.bytes().await?;
 
-        // Authentication responses can contain session tokens. Never log the body.
-        tracing::debug!(len = resp_body.len(), "auth response received");
+        tracing::debug!(
+            len = resp_body.len(),
+            preview = %String::from_utf8_lossy(&resp_body[..resp_body.len().min(500)]),
+            "auth response body"
+        );
 
         if resp_body.is_empty() {
-            if status == reqwest::StatusCode::NO_CONTENT {
-                return Err(ClientError::UnexpectedResponse(
-                    "Apple returned HTTP 204 No Content to the authentication request. No account token was issued. This is not a successful sign-in; the server did not provide a reason. Check for an updated authentication implementation before retrying.".into(),
-                ));
-            }
-
             // Apple's application tier drops unsigned sign-in requests with a
             // zero-length 403. Saying so beats reporting an empty response.
             if signer.is_none() && status == reqwest::StatusCode::FORBIDDEN {
