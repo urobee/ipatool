@@ -67,9 +67,13 @@ mod tests {
 
     #[test]
     fn distinguishes_plist_from_html_error() {
-        assert!(looks_like_plist(b"<plist version=\"1.0\"><dict></dict></plist>"));
+        assert!(looks_like_plist(
+            b"<plist version=\"1.0\"><dict></dict></plist>"
+        ));
         assert!(looks_like_plist(b"bplist00"));
-        assert!(!looks_like_plist(b"<html><body>403 Forbidden</body></html>"));
+        assert!(!looks_like_plist(
+            b"<html><body>403 Forbidden</body></html>"
+        ));
         assert!(!looks_like_plist(b""));
     }
 
