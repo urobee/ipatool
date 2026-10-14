@@ -99,7 +99,10 @@ pub fn validate_auth_endpoint(url: &Url) -> Result<(), ClientError> {
 
     let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
     if host == NATIVE_AUTH_HOST
-        && matches!(url.path().trim_end_matches('/'), NATIVE_AUTH_PATH | NATIVE_FAST_AUTH_PATH)
+        && matches!(
+            url.path().trim_end_matches('/'),
+            NATIVE_AUTH_PATH | NATIVE_FAST_AUTH_PATH
+        )
     {
         return Ok(());
     }
