@@ -105,11 +105,8 @@ pub async fn login(
 
         let resp_body = resp.bytes().await?;
 
-        tracing::debug!(
-            len = resp_body.len(),
-            preview = %String::from_utf8_lossy(&resp_body[..resp_body.len().min(500)]),
-            "auth response body"
-        );
+        // Do not log authentication response bodies: they can contain tokens.
+        tracing::debug!(len = resp_body.len(), "auth response received");
 
         if resp_body.is_empty() {
             // Apple's application tier drops unsigned sign-in requests with a
