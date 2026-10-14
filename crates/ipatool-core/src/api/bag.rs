@@ -30,6 +30,14 @@ pub struct BagConfig {
 
 pub async fn fetch_bag(client: &AppleClient) -> Result<BagConfig, ClientError> {
     let native = std::env::var(EXPERIMENTAL_NATIVE_AUTH).as_deref() == Ok("1");
+    fetch_bag_with_mode(client, native).await
+}
+
+/// Fetch only public Apple bag metadata; never submits account credentials.
+pub async fn fetch_bag_with_mode(
+    client: &AppleClient,
+    native: bool,
+) -> Result<BagConfig, ClientError> {
     let mut req = client.http().get(BAG_URL).timeout(BAG_REQUEST_TIMEOUT);
     if native {
         req = req.header(reqwest::header::USER_AGENT, ITUNES_USER_AGENT);
