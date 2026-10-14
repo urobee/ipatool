@@ -98,13 +98,16 @@ pub async fn login(
 
         let resp_body = resp.bytes().await?;
 
-        tracing::debug!(
-            len = resp_body.len(),
-            preview = %String::from_utf8_lossy(&resp_body[..resp_body.len().min(500)]),
-            "auth response body"
-        );
+        // Authentication responses can contain session tokens. Never log the body.
+        tracing::debug!(len = resp_body.len(), "auth response received");
 
         if resp_body.is_empty() {
+            if status == reqwest::StatusCode::NO_CONTENT {
+                return Err(ClientError::UnexpectedResponse(
+                    "Apple returned HTTP 204 No Content to the authentication request. No account token was issued. This is not a successful sign-in; the server did not provide a reason. Check for an updated authentication implementation before retrying.".into(),
+                ));
+            }
+
             // Apple's application tier drops unsigned sign-in requests with a
             // zero-length 403. Saying so beats reporting an empty response.
             if signer.is_none() && status == reqwest::StatusCode::FORBIDDEN {
