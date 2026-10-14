@@ -13,6 +13,8 @@ const AUTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Header carrying the SAP signature over the request body.
 const ACTION_SIGNATURE_HEADER: &str = "X-Apple-ActionSignature";
+const NATIVE_AUTH_HOST: &str = "auth.itunes.apple.com";
+const ITUNES_USER_AGENT: &str = "iTunes/12.12.0.6 (Windows; Microsoft Windows 10 x64)";
 
 pub async fn login(
     client: &AppleClient,
@@ -46,6 +48,11 @@ pub async fn login(
             .post(current_url.as_str())
             .header("Content-Type", "application/x-apple-plist")
             .timeout(AUTH_REQUEST_TIMEOUT);
+
+        // Keep the User-Agent consistent with the bag request that selected MZAuth.
+        if current_url.host_str() == Some(NATIVE_AUTH_HOST) {
+            request = request.header(reqwest::header::USER_AGENT, ITUNES_USER_AGENT);
+        }
 
         // Apple signs the exact bytes it receives, so this has to happen after
         // the body is serialized and before it is sent.
@@ -98,11 +105,8 @@ pub async fn login(
 
         let resp_body = resp.bytes().await?;
 
-        tracing::debug!(
-            len = resp_body.len(),
-            preview = %String::from_utf8_lossy(&resp_body[..resp_body.len().min(500)]),
-            "auth response body"
-        );
+        // Do not log authentication response bodies: they can contain tokens.
+        tracing::debug!(len = resp_body.len(), "auth response received");
 
         if resp_body.is_empty() {
             // Apple's application tier drops unsigned sign-in requests with a
@@ -118,8 +122,25 @@ pub async fn login(
             )));
         }
 
+        if !crate::client::plist_xml::looks_like_plist(&resp_body) {
+            return Err(ClientError::UnexpectedResponse(format!(
+                "authentication endpoint returned a non-plist response (HTTP {status});                  no account verdict was received"
+            )));
+        }
+
         let dict: HashMap<String, plist::Value> =
             crate::client::plist_xml::parse_plist_response(&resp_body)?;
+
+        // Log only fixed metadata flags, never arbitrary response values. Apple's
+        // plist can include account details, tokens, or private dialog text.
+        tracing::debug!(
+            has_failure_type = dict.contains_key("failureType"),
+            has_customer_message = dict.contains_key("customerMessage"),
+            has_dialog = dict.contains_key("dialog"),
+            has_dialog_id = dict.contains_key("dialogId"),
+            has_password_token = dict.contains_key("passwordToken"),
+            "auth response metadata"
+        );
 
         if let Some(err) = StoreError::from_plist_dict(&dict) {
             if err.is_retryable() && attempt < MAX_ATTEMPTS {

@@ -1,0 +1,33 @@
+name: Windows authentication test build
+
+on:
+  push:
+    branches: [fix/windows-auth-build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+      - name: Compile Windows release
+        run: cargo build --release --locked --workspace
+      - name: Package executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/release/ipatool.exe dist/ipatool.exe
+      - name: Upload downloadable Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipatool-windows-auth-test
+          path: dist/ipatool.exe
+          if-no-files-found: error
+          retention-days: 7

@@ -75,6 +75,8 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum AuthAction {
+    /// Compare public Apple authentication configuration without signing in.
+    Diagnose,
     Login {
         #[arg(long)]
         email: String,
@@ -110,7 +112,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let filter = if cli.verbose {
-        EnvFilter::new("debug")
+        // Keep dependency-level debug logs disabled: cookie-store and HTTP libraries
+        // may print raw Set-Cookie values, including authentication tokens.
+        EnvFilter::new("info,ipatool_core=debug,ipatool=debug")
     } else {
         EnvFilter::from_default_env()
     };
@@ -136,6 +140,20 @@ async fn main() -> Result<()> {
 
     match command {
         Commands::Auth { action } => match action {
+            AuthAction::Diagnose => {
+                for (label, native) in [("default", false), ("experimental-native", true)] {
+                    println!("Mode: {label}");
+                    match ipatool_core::api::bag::fetch_bag_with_mode(&client, native).await {
+                        Ok(bag) => {
+                            println!("  auth endpoint: {}", bag.auth_endpoint);
+                            println!("  SAP setup: {}", bag.sap.setup_url);
+                            println!("  SAP certificate: {}", bag.sap.cert_url);
+                            println!("  SAP version: {}", bag.sap.version);
+                        }
+                        Err(err) => println!("  bag lookup failed: {err}"),
+                    }
+                }
+            }
             AuthAction::Login {
                 email,
                 password,
