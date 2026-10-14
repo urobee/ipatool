@@ -110,7 +110,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let filter = if cli.verbose {
-        EnvFilter::new("debug")
+        // Keep dependency-level debug logs disabled: cookie-store and HTTP libraries
+        // may print raw Set-Cookie values, including authentication tokens.
+        EnvFilter::new("info,ipatool_core=debug,ipatool=debug")
     } else {
         EnvFilter::from_default_env()
     };
